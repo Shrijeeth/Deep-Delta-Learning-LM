@@ -77,12 +77,16 @@ Environment variables (see `config.py`):
 
 - `WANDB_API_KEY` (optional) — enable WandB logging
 - `TOKENIZER_NAME` (default: gpt2)
+- `DATA_LENGTH` (default 128) — tokenizer max length before blocking
 - `BLOCK_SIZE` (sequence length, default 512)
 - `BATCH_SIZE` (default 16)
 - `MAX_EPOCHS` (default 3)
 - `LR` (default 3e-4)
+- `NUM_WORKERS` (default 6) — dataloader workers
 - `IS_RESUME`, `CHECKPOINT_PATH` for resuming training
 - `MAX_TRAINING_HOURS` (default 5) — Lightning `max_time` limit
+- `AWS_ENABLED` (default False) — enable post-train upload
+- `AWS_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_BUCKET_NAME`, `S3_MODEL_PATH` — S3-compatible upload target for `checkpoints_deeplatent/last.ckpt`
 
 ---
 
@@ -110,7 +114,7 @@ IS_RESUME=true CHECKPOINT_PATH=checkpoints_deeplatent/last.ckpt python main.py -
 
 ## Inference (generation)
 
-`v1/inference.py` is a stub; typical flow:
+`v1/inference.py` is a lightweight helper; typical flow:
 
 ```python
 from v1.inference import run_inference
@@ -125,6 +129,13 @@ CLI inference (uses defaults in `v1/inference.py` and `CHECKPOINT_PATH` from .en
 ```bash
 python main.py --version v1 --mode inference
 ```
+
+What happens:
+
+1. Loads settings from `.env` (tokenizer name, block size, checkpoint path, etc.).
+2. Builds `DeepLatentGPT` with `DeepLatentConfig` using `BLOCK_SIZE` from settings and tokenizer vocab.
+3. Loads the checkpoint at `CHECKPOINT_PATH` (errors if missing).
+4. Generates with temperature, top-k, and repetition penalty settings defined in `v1/inference.py`.
 
 ---
 

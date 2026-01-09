@@ -42,7 +42,7 @@ def train():
     dm = WikiDataModule(
         model_name=settings.TOKENIZER_NAME,
         batch_size=settings.BATCH_SIZE,
-        max_length=settings.BLOCK_SIZE,
+        max_length=settings.DATA_LENGTH,
     )
 
     # 4. Model Setup

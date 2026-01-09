@@ -15,12 +15,12 @@ def run_inference():
     settings = get_settings()
 
     # --- User-adjustable defaults ---
-    PROMPT = "Once upon a time "
+    PROMPT = "Once upon a time,"
     CHECKPOINT_PATH = settings.CHECKPOINT_PATH
     MAX_NEW_TOKENS = 50
     TEMPERATURE = 0.7
-    TOP_K = 50  # e.g., 50 for top-k sampling
-    REPETITION_PENALTY = 1.5
+    TOP_K = 15  # e.g., 50 for top-k sampling
+    REPETITION_PENALTY = 2.5
     # --------------------------------
 
     tokenizer = AutoTokenizer.from_pretrained(settings.TOKENIZER_NAME)

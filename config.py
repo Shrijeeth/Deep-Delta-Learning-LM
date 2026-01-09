@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     WANDB_API_KEY: str = os.getenv("WANDB_API_KEY", "")
     NUM_WORKERS: int = os.getenv("NUM_WORKERS", 6)
     TOKENIZER_NAME: str = os.getenv("TOKENIZER_NAME", "gpt2")
+    DATA_LENGTH: int = os.getenv("DATA_LENGTH", 128)
     BLOCK_SIZE: int = os.getenv("BLOCK_SIZE", 512)
     BATCH_SIZE: int = os.getenv("BATCH_SIZE", 16)
     MAX_EPOCHS: int = os.getenv("MAX_EPOCHS", 3)
