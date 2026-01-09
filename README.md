@@ -153,6 +153,6 @@ print(tokenizer.decode(ids[0], skip_special_tokens=True))
 ---
 
 ## Roadmap ideas
-- Add fast autoregressive generation utility in `v1/inference.py`
+
 - Experiment with deeper stacks / scaling laws under delta gating
 - Compare against vanilla GPT residual baseline on TinyStories perplexity
