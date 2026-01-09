@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import AdamW
+from torchmetrics.text.perplexity import Perplexity
 
 
 # --- Configuration ---
@@ -191,6 +192,10 @@ class DeepLatentGPT(L.LightningModule):
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         self.transformer.wte.weight = self.lm_head.weight  # Tie weights
 
+        self.perplexity_metric = Perplexity(
+            ignore_index=-100,
+        )
+
         self.apply(self._init_weights)
 
     def _init_weights(self, module):
@@ -227,7 +232,9 @@ class DeepLatentGPT(L.LightningModule):
         loss = F.cross_entropy(
             logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-100
         )
+        perplexity = self.perplexity_metric(logits, targets)
         self.log("train/loss", loss)
+        self.log("train/perplexity", perplexity)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -236,7 +243,9 @@ class DeepLatentGPT(L.LightningModule):
         loss = F.cross_entropy(
             logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-100
         )
+        perplexity = self.perplexity_metric(logits, targets)
         self.log("val/loss", loss)
+        self.log("val/perplexity", perplexity)
         return loss
 
     def configure_optimizers(self):
