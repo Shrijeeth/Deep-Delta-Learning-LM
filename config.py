@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     IS_RESUME: bool = os.getenv("IS_RESUME", False)
     CHECKPOINT_PATH: str = os.getenv("CHECKPOINT_PATH", "")
     MAX_TRAINING_HOURS: int = os.getenv("MAX_TRAINING_HOURS", 5)
+    AWS_ENABLED: bool = os.getenv("AWS_ENABLED", False)
+    AWS_ENDPOINT_URL: str = os.getenv("AWS_ENDPOINT_URL", "")
+    AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
+    AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+    AWS_BUCKET_NAME: str = os.getenv("AWS_BUCKET_NAME", "deep-delta-learning-lm")
+    S3_MODEL_PATH: str = os.getenv("S3_MODEL_PATH", "")
 
     class Config:
         env_file = ".env"

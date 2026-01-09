@@ -1,5 +1,6 @@
 import os
 
+import boto3
 import lightning as L
 import torch
 import wandb
@@ -79,3 +80,18 @@ def train():
         trainer.fit(model, datamodule=dm, ckpt_path=settings.CHECKPOINT_PATH)
     else:
         trainer.fit(model, datamodule=dm)
+
+    # Store final model in S3
+    if (
+        settings.AWS_ENABLED
+        and settings.AWS_BUCKET_NAME
+        and settings.S3_MODEL_PATH
+        and os.path.exists("checkpoints_deeplatent/last.ckpt")
+    ):
+        s3 = boto3.client("s3")
+        s3.upload_file(
+            "checkpoints_deeplatent/last.ckpt",
+            settings.AWS_BUCKET_NAME,
+            settings.S3_MODEL_PATH,
+        )
+        s3.close()
