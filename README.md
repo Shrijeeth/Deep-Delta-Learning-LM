@@ -81,6 +81,7 @@ Environment variables (see `config.py`):
 - `MAX_EPOCHS` (default 3)
 - `LR` (default 3e-4)
 - `IS_RESUME`, `CHECKPOINT_PATH` for resuming training
+- `MAX_TRAINING_HOURS` (default 5) — Lightning `max_time` limit
 
 ---
 
@@ -95,7 +96,7 @@ What happens:
 1. Seeds everything, sets matmul precision high.
 2. Builds TinyStories datamodule with dynamic padding.
 3. Instantiates `DeepLatentGPT` with the delta blocks.
-4. Runs Lightning Trainer with checkpointing, LR monitor, optional WandB logger.
+4. Runs Lightning Trainer with checkpointing, LR monitor, optional WandB logger, and a wall-clock cap (`max_time`) set via `MAX_TRAINING_HOURS`.
 
 To resume:
 

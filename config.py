@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     LR: float = os.getenv("LR", 3e-4)
     IS_RESUME: bool = os.getenv("IS_RESUME", False)
     CHECKPOINT_PATH: str = os.getenv("CHECKPOINT_PATH", "")
+    MAX_TRAINING_HOURS: int = os.getenv("MAX_TRAINING_HOURS", 5)
 
     class Config:
         env_file = ".env"
