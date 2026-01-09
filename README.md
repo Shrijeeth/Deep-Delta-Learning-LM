@@ -46,6 +46,7 @@ optimization stability and expressivity—especially for deeper stacks.
   from `config.py`. Perplexity is tracked during train/val.  
 - **Data:** TinyStories via Hugging Face `datasets`, tokenized with `AutoTokenizer` (defaults to `gpt2`).
   Dynamic padding via `DataCollatorForLanguageModeling`.  
+- **Generation:** `DeepLatentGPT.generate` supports temperature, top-k, and repetition penalty.  
 - **Logging/ckpts:** Optional Weights & Biases logging, Lightning checkpoints kept in
   `checkpoints_deeplatent/`.
 
@@ -88,7 +89,8 @@ Environment variables (see `config.py`):
 ## Training
 
 ```bash
-python -m v1.train
+# Run the CLI entrypoint (loads .env and dispatches by version/mode)
+python main.py --version v1 --mode train
 ```
 
 What happens:
@@ -101,7 +103,7 @@ What happens:
 To resume:
 
 ```bash
-IS_RESUME=true CHECKPOINT_PATH=checkpoints_deeplatent/last.ckpt python -m v1.train
+IS_RESUME=true CHECKPOINT_PATH=checkpoints_deeplatent/last.ckpt python main.py --version v1
 ```
 
 ---
@@ -111,26 +113,17 @@ IS_RESUME=true CHECKPOINT_PATH=checkpoints_deeplatent/last.ckpt python -m v1.tra
 `v1/inference.py` is a stub; typical flow:
 
 ```python
-import torch
-from transformers import AutoTokenizer
-from v1.model import DeepLatentGPT, DeepLatentConfig
+from v1.inference import run_inference
 
-tokenizer = AutoTokenizer.from_pretrained("gpt2")
-config = DeepLatentConfig(vocab_size=tokenizer.vocab_size, block_size=128)
-model = DeepLatentGPT(config)
-ckpt = torch.load("checkpoints_deeplatent/last.ckpt")
-model.load_state_dict(ckpt["state_dict"])
-model.eval()
+# Adjust defaults inside v1/inference.py (PROMPT, CHECKPOINT_PATH, MAX_NEW_TOKENS,
+# TEMPERATURE, TOP_K, REPETITION_PENALTY) or set CHECKPOINT_PATH via .env.
+run_inference()
+```
 
-prompt = "Once upon a time"
-ids = tokenizer(prompt, return_tensors="pt").input_ids
-with torch.no_grad():
-    for _ in range(50):
-        logits = model(ids)[:, -1, :]
-        next_id = torch.argmax(logits, dim=-1, keepdim=True)
-        ids = torch.cat([ids, next_id], dim=1)
+CLI inference (uses defaults in `v1/inference.py` and `CHECKPOINT_PATH` from .env):
 
-print(tokenizer.decode(ids[0], skip_special_tokens=True))
+```bash
+python main.py --version v1 --mode inference
 ```
 
 ---
@@ -139,7 +132,8 @@ print(tokenizer.decode(ids[0], skip_special_tokens=True))
 
 - `v1/model.py` — Deep Delta blocks, GPT backbone, Lightning module
 - `v1/train.py` — training script + Trainer setup
-- `v1/inference.py` — placeholder for generation helpers
+- `main.py` — CLI entrypoint that loads `.env` and routes to a versioned trainer
+- `v1/inference.py` — checkpoint-loading inference helper (temperature/top-k/repetition penalty)
 - `data.py` — TinyStories datamodule (tokenize, block, pad)
 - `config.py` — environment-driven hyperparameters
 - `Makefile` — install/format/lint helpers

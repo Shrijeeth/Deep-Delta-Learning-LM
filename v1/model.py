@@ -248,6 +248,47 @@ class DeepLatentGPT(L.LightningModule):
         self.log("val/perplexity", perplexity)
         return loss
 
+    @torch.no_grad()
+    def generate(
+        self,
+        idx,
+        max_new_tokens: int = 20,
+        temperature: float = 1.0,
+        top_k: int | None = None,
+        repetition_penalty: float = 1.0,
+    ):
+        """
+        Autoregressive generation with optional repetition penalty and top-k sampling.
+        repetition_penalty: 1.0 means no penalty; >1.0 penalizes repeated tokens.
+        """
+        for _ in range(max_new_tokens):
+            if idx.size(1) > self.config.block_size:
+                idx_cond = idx[:, -self.config.block_size :]
+            else:
+                idx_cond = idx
+
+            logits = self(idx_cond)
+            logits = logits[:, -1, :] / temperature
+
+            if repetition_penalty != 1.0:
+                for i in range(idx.size(0)):
+                    unique_tokens = torch.unique(idx[i])
+                    logits[i, unique_tokens] = torch.where(
+                        logits[i, unique_tokens] < 0,
+                        logits[i, unique_tokens] * repetition_penalty,
+                        logits[i, unique_tokens] / repetition_penalty,
+                    )
+
+            if top_k is not None:
+                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < v[:, [-1]]] = -float("inf")
+
+            probs = F.softmax(logits, dim=-1)
+            idx_next = torch.multinomial(probs, num_samples=1)
+            idx = torch.cat((idx, idx_next), dim=1)
+
+        return idx
+
     def configure_optimizers(self):
         # Weight decay setup
         param_dict = {pn: p for pn, p in self.named_parameters()}
