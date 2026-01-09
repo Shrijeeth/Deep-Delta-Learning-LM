@@ -144,6 +144,10 @@ python main.py --version v1 --mode inference
 
 - Zhang, Yifan; Liu, Yifeng; Wang, Mengdi; Gu, Quanquan. *Deep Delta Learning*. arXiv:2601.00417, 2026.
   [arxiv.org/abs/2601.00417](https://arxiv.org/abs/2601.00417)
+- Paszke, Adam; Gross, Sam; Massa, Francisco; Lerer, Adam; Bradbury, James; Chanan, Gregory; Killeen, Trevor; Lin, Zeming; Gimelshein, Natalia; Antiga, Luca; et al. *PyTorch: An Imperative Style, High-Performance Deep Learning Library*. NeurIPS 2019. arXiv:1912.01703. [arxiv.org/abs/1912.01703](https://arxiv.org/abs/1912.01703)
+- PyTorch Lightning project documentation. [lightning.ai/docs/pytorch/stable](https://lightning.ai/docs/pytorch/stable/)
+- Eldan, Ronen; Li, Yuanzhi. *TinyStories: How Small Can Language Models Be and Still Speak Coherent English?* arXiv:2305.07759, 2023. [arxiv.org/abs/2305.07759](https://arxiv.org/abs/2305.07759)
+- Radford, Alec; Wu, Jeffrey; Child, Rewon; Luan, David; Amodei, Dario; Sutskever, Ilya. *Language Models are Unsupervised Multitask Learners* (GPT-2 Technical Report), 2019. [cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf)
 
 ---
 
