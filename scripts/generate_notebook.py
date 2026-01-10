@@ -31,7 +31,11 @@ class NotebookGeneratorError(Exception):
 class NotebookGenerator:
     """Generates environment-specific Jupyter notebooks with Claude Code-style UI."""
 
-    def __init__(self, pre_selected_env: Optional[str] = None, pre_selected_version: Optional[str] = None):
+    def __init__(
+        self,
+        pre_selected_env: Optional[str] = None,
+        pre_selected_version: Optional[str] = None,
+    ):
         self.console = Console()
         self.environment: Optional[str] = pre_selected_env
         self.version: Optional[str] = pre_selected_version
@@ -155,9 +159,7 @@ class NotebookGenerator:
         self.console.print("\n[bold cyan]Step 1b: Select Model Version[/bold cyan]")
 
         choices = [
-            questionary.Choice(
-                "v1 - Original Deep Latent GPT", value="v1"
-            ),
+            questionary.Choice("v1 - Original Deep Latent GPT", value="v1"),
             questionary.Choice(
                 "v2 - Improved Deep Latent GPT (Recommended)", value="v2"
             ),
@@ -170,9 +172,7 @@ class NotebookGenerator:
         if not self.version:
             raise KeyboardInterrupt
 
-        self.console.print(
-            f"[green]✓ Selected: {self.version}[/green]"
-        )
+        self.console.print(f"[green]✓ Selected: {self.version}[/green]")
 
     def configure_features(self):
         """Step 2: Feature selection."""
@@ -268,7 +268,9 @@ class NotebookGenerator:
         }
         table.add_row("5. Load Secrets", secrets_desc[self.environment])
         table.add_row("6. Environment Variables", "Configure settings and paths")
-        table.add_row("7. Import Libraries", f"Import torch, Lightning, {self.version}.model")
+        table.add_row(
+            "7. Import Libraries", f"Import torch, Lightning, {self.version}.model"
+        )
 
         section_num = 8
         if self.features["widgets"]:
@@ -525,7 +527,9 @@ os.environ['TOKENIZER_NAME'] = 'gpt2'
 os.environ['BLOCK_SIZE'] = '{self.hyperparams['block_size']}'
 os.environ['DATA_LENGTH'] = '{self.hyperparams['data_length']}'
 
-# Training hyperparameters (will be overridden by widgets if enabled)
+# Training hyperparameters
+# Note: These values will be used by the train() function.
+# If you run the widget cell below, widget values will override these.
 os.environ['BATCH_SIZE'] = '{self.hyperparams['batch_size']}'
 os.environ['LR'] = '{self.hyperparams['lr']}'
 os.environ['MAX_EPOCHS'] = '{self.hyperparams['max_epochs']}'
@@ -551,9 +555,8 @@ print(f"  Dataset cache: {{dataset_cache}}")"""
         """Generate imports cell."""
         code = f"""# Import required libraries
 import sys
+import os
 import torch
-from transformers import AutoTokenizer
-import lightning as L
 
 # Add project to path (environment detection)
 if 'KAGGLE_CONTAINER_NAME' in os.environ:
@@ -563,16 +566,14 @@ elif 'COLAB_GPU' in os.environ:
 else:
     sys.path.insert(0, os.getcwd())
 
-from config import get_settings
-from data import WikiDataModule
-from {self.version}.model import DeepLatentConfig, DeepLatentGPT
-
+# Verify setup
 print(f"PyTorch version: {{torch.__version__}}")
-print(f"Lightning version: {{L.__version__}}")
 print(f"CUDA available: {{torch.cuda.is_available()}}")
 print(f"Model version: {self.version}")
 if torch.cuda.is_available():
-    print(f"CUDA device: {{torch.cuda.get_device_name(0)}}")"""
+    print(f"CUDA device: {{torch.cuda.get_device_name(0)}}")
+
+print("\\n✓ Environment ready!")"""
         return self.generate_code_cell(code)
 
     def generate_widget_cell(self) -> Dict:
@@ -690,84 +691,26 @@ print(f"Hyperparameter widgets ready. Default values will apply in {{auto_procee
             self.generate_markdown_cell(
                 """## Training Pipeline
 
-This section initializes the data module, model, and Lightning Trainer, then runs training."""
+This section runs the training pipeline using the project's train module."""
             )
         )
 
-        # Data module initialization
-        data_code = """# Initialize data module
-settings = get_settings()
+        # Training code - simplified
+        train_code = f"""# Run training
+from {self.version}.train import train
 
-dm = WikiDataModule(
-    model_name=settings.TOKENIZER_NAME,
-    batch_size=settings.BATCH_SIZE,
-    max_length=settings.DATA_LENGTH
-)
-
-print(f"✓ Data module initialized")
-print(f"  Tokenizer: {settings.TOKENIZER_NAME}")
-print(f"  Batch size: {settings.BATCH_SIZE}")
-print(f"  Max length: {settings.DATA_LENGTH}")"""
-        cells.append(self.generate_code_cell(data_code))
-
-        # Model initialization
-        model_code = """# Initialize model
-config = DeepLatentConfig(
-    vocab_size=dm.tokenizer.vocab_size,
-    block_size=settings.BLOCK_SIZE,
-    n_layer=n_layer_slider.value if 'n_layer_slider' in dir() else 8,
-    n_head=8,
-    n_embd=n_embd_slider.value if 'n_embd_slider' in dir() else 384,
-    dropout=0.1,
-    bias=False,
-    beta_init=-2.0,
-    lr=settings.LR
-)
-
-model = DeepLatentGPT(config)
-
-print(f"✓ Model initialized")
-print(f"  Layers: {config.n_layer}")
-print(f"  Embedding dim: {config.n_embd}")
-print(f"  Heads: {config.n_head}")
-print(f"  Total parameters: {sum(p.numel() for p in model.parameters()):,}")"""
-        cells.append(self.generate_code_cell(model_code))
-
-        # Trainer setup and training
-        env_config = self.get_environment_config()
-        train_code = f"""# Setup trainer and start training
-from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
-
-# Callbacks
-checkpoint_cb = ModelCheckpoint(
-    dirpath='{env_config['checkpoint_dir']}',
-    filename='deeplatent-{{epoch:02d}}-{{val_loss:.2f}}',
-    save_top_k=1,
-    save_last=True,
-    monitor='val/loss',
-    mode='min'
-)
-
-lr_monitor = LearningRateMonitor(logging_interval='step')
-
-# Trainer
-trainer = L.Trainer(
-    accelerator='auto',
-    max_epochs=settings.MAX_EPOCHS,
-    callbacks=[checkpoint_cb, lr_monitor],
-    max_time={{'hours': settings.MAX_TRAINING_HOURS}},
-    gradient_clip_val=1.0,
-    log_every_n_steps=10
-)
-
-# Train
 print("\\n" + "="*60)
 print("Starting training...")
 print("="*60 + "\\n")
-trainer.fit(model, datamodule=dm)
+
+# Train using the official training function
+# It will read configuration from environment variables set above
+train()
+
 print("\\n" + "="*60)
 print("✓ Training complete!")
 print("="*60)"""
+
         cells.append(self.generate_code_cell(train_code))
 
         return cells
@@ -781,97 +724,56 @@ print("="*60)"""
             self.generate_markdown_cell(
                 """## Inference & Text Generation
 
-Load a trained checkpoint and generate text with configurable parameters."""
+Load a trained checkpoint and generate text."""
             )
         )
 
-        # Load checkpoint
         env_config = self.get_environment_config()
-        load_code = f"""# Load checkpoint
-import torch
 
+        # Set checkpoint path
+        setup_code = f"""# Configure inference
+import os
+
+# Set checkpoint path
 checkpoint_path = '{env_config['checkpoint_dir']}/last.ckpt'
+os.environ['CHECKPOINT_PATH'] = checkpoint_path
 
 if not os.path.exists(checkpoint_path):
     print(f"⚠ Checkpoint not found at {{checkpoint_path}}")
     print("Available checkpoints:")
     !ls -lh {env_config['checkpoint_dir']}
 else:
-    # Load model
-    ckpt = torch.load(checkpoint_path, map_location='cpu')
-    state_dict = ckpt['state_dict'] if 'state_dict' in ckpt else ckpt
+    print(f"✓ Checkpoint found: {{checkpoint_path}}")"""
 
-    # Initialize model with same config
-    inference_model = DeepLatentGPT(config)
-    inference_model.load_state_dict(state_dict, strict=False)
+        cells.append(self.generate_code_cell(setup_code))
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    inference_model.to(device)
-    inference_model.eval()
-
-    print(f"✓ Model loaded from {{checkpoint_path}} on {{device}}")"""
-        cells.append(self.generate_code_cell(load_code))
-
-        # Generation function
-        gen_code = """# Generate text
-def generate_text(prompt, max_new_tokens=50, temperature=0.7, top_k=15, repetition_penalty=2.5):
-    \"\"\"Generate text from a prompt.\"\"\"
-    tokenizer = dm.tokenizer
-    input_ids = tokenizer(prompt, return_tensors='pt').input_ids.to(device)
-
-    with torch.no_grad():
-        output_ids = inference_model.generate(
-            input_ids,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_k=top_k,
-            repetition_penalty=repetition_penalty
-        )
-
-    output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-    return output_text
-
-# Example generation
-prompts = [
-    "Once upon a time,",
-    "The little robot",
-    "In a magical forest,",
-]
+        # Run inference with default prompt
+        inference_code = f"""# Run inference with default prompt
+from {self.version}.inference import run_inference
 
 print("\\n" + "="*60)
-print("Example Generations")
-print("="*60)
-
-for prompt in prompts:
-    print(f"\\n{'─'*60}")
-    print(f"Prompt: {prompt}")
-    print(f"{'─'*60}")
-    result = generate_text(prompt, max_new_tokens=100, temperature=0.8)
-    print(result)
-
-print("\\n" + "="*60)"""
-        cells.append(self.generate_code_cell(gen_code))
-
-        # Interactive generation
-        interactive_code = """# Interactive generation (run this cell to generate from custom prompts)
-print("\\n" + "="*60)
-print("Interactive Generation")
+print("Running inference...")
 print("="*60 + "\\n")
 
-custom_prompt = input("Enter your prompt: ")
-print(f"\\nGenerating with prompt: '{custom_prompt}'\\n")
+run_inference()"""
 
-generated = generate_text(
-    custom_prompt,
-    max_new_tokens=150,
-    temperature=0.7,
-    top_k=20,
-    repetition_penalty=2.0
-)
+        cells.append(self.generate_code_cell(inference_code))
 
+        # Interactive custom prompt
+        interactive_code = f"""# Custom prompt inference
+# Note: You can modify the prompt below and run this cell multiple times
+
+custom_prompt = "In a magical forest,"  # Change this prompt as desired
+
+print(f"\\nGenerating with custom prompt: '{{custom_prompt}}'\\n")
 print("─"*60)
-print(generated)
+
+# Run inference with custom prompt
+from {self.version}.inference import run_inference
+run_inference(prompt=custom_prompt)
+
 print("─"*60)"""
+
         cells.append(self.generate_code_cell(interactive_code))
 
         return cells
@@ -1090,7 +992,9 @@ Version options:
 
     args = parser.parse_args()
 
-    generator = NotebookGenerator(pre_selected_env=args.env, pre_selected_version=args.version)
+    generator = NotebookGenerator(
+        pre_selected_env=args.env, pre_selected_version=args.version
+    )
 
     # Show pre-selected options
     if args.env:

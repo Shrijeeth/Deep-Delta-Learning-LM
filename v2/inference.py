@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 
 import torch
 from transformers import AutoTokenizer
@@ -7,21 +8,54 @@ from config import get_settings
 from v2.model import DeepLatentConfig, DeepLatentGPT
 
 
-def run_inference():
+def run_inference(
+    prompt: Optional[str] = None,
+    max_new_tokens: Optional[int] = None,
+    temperature: Optional[float] = None,
+    top_k: Optional[int] = None,
+    repetition_penalty: Optional[float] = None,
+    debug: Optional[bool] = None,
+):
     """
-    Lightweight inference helper for DeepLatentGPT v1.
-    Uses defaults defined here; adjust PROMPT / CHECKPOINT_PATH / generation params below.
+    Lightweight inference helper for DeepLatentGPT v2.
+
+    Args:
+        prompt: Text prompt for generation (default: "Once upon a " or INFERENCE_PROMPT env var)
+        max_new_tokens: Number of tokens to generate (default: 50)
+        temperature: Sampling temperature (default: 1.0)
+        top_k: Top-k sampling parameter (default: 50)
+        repetition_penalty: Repetition penalty (default: 1.1)
+        debug: Enable debug output (default: True)
     """
     settings = get_settings()
 
     # --- User-adjustable defaults ---
-    PROMPT = "Once upon a "
-    CHECKPOINT_PATH = settings.CHECKPOINT_PATH
-    MAX_NEW_TOKENS = 50
-    TEMPERATURE = 1.0
-    TOP_K = 50  # e.g., 50 for top-k sampling
-    REPETITION_PENALTY = 1.1
+    DEFAULT_PROMPT = "Once upon a "
+    DEFAULT_MAX_NEW_TOKENS = 50
+    DEFAULT_TEMPERATURE = 1.0
+    DEFAULT_TOP_K = 50
+    DEFAULT_REPETITION_PENALTY = 1.1
+    DEFAULT_DEBUG = True
     # --------------------------------
+
+    # Use provided parameters or check environment, fallback to defaults
+    PROMPT = (
+        prompt
+        if prompt is not None
+        else os.environ.get("INFERENCE_PROMPT", DEFAULT_PROMPT)
+    )
+    CHECKPOINT_PATH = settings.CHECKPOINT_PATH
+    MAX_NEW_TOKENS = (
+        max_new_tokens if max_new_tokens is not None else DEFAULT_MAX_NEW_TOKENS
+    )
+    TEMPERATURE = temperature if temperature is not None else DEFAULT_TEMPERATURE
+    TOP_K = top_k if top_k is not None else DEFAULT_TOP_K
+    REPETITION_PENALTY = (
+        repetition_penalty
+        if repetition_penalty is not None
+        else DEFAULT_REPETITION_PENALTY
+    )
+    DEBUG = debug if debug is not None else DEFAULT_DEBUG
 
     tokenizer = AutoTokenizer.from_pretrained(settings.TOKENIZER_NAME)
     if tokenizer.pad_token is None:
@@ -53,7 +87,7 @@ def run_inference():
         temperature=TEMPERATURE,
         top_k=TOP_K,
         repetition_penalty=REPETITION_PENALTY,
-        debug=True,
+        debug=DEBUG,
     )
     output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
 

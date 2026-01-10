@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 
 import torch
 from transformers import AutoTokenizer
@@ -7,21 +8,50 @@ from config import get_settings
 from v1.model import DeepLatentConfig, DeepLatentGPT
 
 
-def run_inference():
+def run_inference(
+    prompt: Optional[str] = None,
+    max_new_tokens: Optional[int] = None,
+    temperature: Optional[float] = None,
+    top_k: Optional[int] = None,
+    repetition_penalty: Optional[float] = None,
+):
     """
     Lightweight inference helper for DeepLatentGPT v1.
-    Uses defaults defined here; adjust PROMPT / CHECKPOINT_PATH / generation params below.
+
+    Args:
+        prompt: Text prompt for generation (default: "Once upon a " or INFERENCE_PROMPT env var)
+        max_new_tokens: Number of tokens to generate (default: 50)
+        temperature: Sampling temperature (default: 0.7)
+        top_k: Top-k sampling parameter (default: 15)
+        repetition_penalty: Repetition penalty (default: 2.5)
     """
     settings = get_settings()
 
     # --- User-adjustable defaults ---
-    PROMPT = "Once upon a "
-    CHECKPOINT_PATH = settings.CHECKPOINT_PATH
-    MAX_NEW_TOKENS = 50
-    TEMPERATURE = 0.7
-    TOP_K = 15  # e.g., 50 for top-k sampling
-    REPETITION_PENALTY = 2.5
+    DEFAULT_PROMPT = "Once upon a "
+    DEFAULT_MAX_NEW_TOKENS = 50
+    DEFAULT_TEMPERATURE = 0.7
+    DEFAULT_TOP_K = 15
+    DEFAULT_REPETITION_PENALTY = 2.5
     # --------------------------------
+
+    # Use provided parameters or check environment, fallback to defaults
+    PROMPT = (
+        prompt
+        if prompt is not None
+        else os.environ.get("INFERENCE_PROMPT", DEFAULT_PROMPT)
+    )
+    CHECKPOINT_PATH = settings.CHECKPOINT_PATH
+    MAX_NEW_TOKENS = (
+        max_new_tokens if max_new_tokens is not None else DEFAULT_MAX_NEW_TOKENS
+    )
+    TEMPERATURE = temperature if temperature is not None else DEFAULT_TEMPERATURE
+    TOP_K = top_k if top_k is not None else DEFAULT_TOP_K
+    REPETITION_PENALTY = (
+        repetition_penalty
+        if repetition_penalty is not None
+        else DEFAULT_REPETITION_PENALTY
+    )
 
     tokenizer = AutoTokenizer.from_pretrained(settings.TOKENIZER_NAME)
     if tokenizer.pad_token is None:
