@@ -31,9 +31,10 @@ class NotebookGeneratorError(Exception):
 class NotebookGenerator:
     """Generates environment-specific Jupyter notebooks with Claude Code-style UI."""
 
-    def __init__(self, pre_selected_env: Optional[str] = None):
+    def __init__(self, pre_selected_env: Optional[str] = None, pre_selected_version: Optional[str] = None):
         self.console = Console()
         self.environment: Optional[str] = pre_selected_env
+        self.version: Optional[str] = pre_selected_version
         self.features: Dict[str, bool] = {
             "training": True,
             "inference": True,
@@ -146,6 +147,33 @@ class NotebookGenerator:
             f"[green]✓ Selected: {self.environment.capitalize()}[/green]"
         )
 
+    def select_version(self):
+        """Step 1b: Version selection."""
+        if self.version:
+            return  # Already pre-selected
+
+        self.console.print("\n[bold cyan]Step 1b: Select Model Version[/bold cyan]")
+
+        choices = [
+            questionary.Choice(
+                "v1 - Original Deep Latent GPT", value="v1"
+            ),
+            questionary.Choice(
+                "v2 - Improved Deep Latent GPT (Recommended)", value="v2"
+            ),
+        ]
+
+        self.version = questionary.select(
+            "Choose version:", choices=choices, style=self.questionary_style
+        ).ask()
+
+        if not self.version:
+            raise KeyboardInterrupt
+
+        self.console.print(
+            f"[green]✓ Selected: {self.version}[/green]"
+        )
+
     def configure_features(self):
         """Step 2: Feature selection."""
         self.console.print(
@@ -223,7 +251,7 @@ class NotebookGenerator:
 
         table.add_row(
             "1. Title + Instructions",
-            f"Project overview for {self.environment.capitalize()}",
+            f"Project overview for {self.environment.capitalize()} ({self.version})",
         )
         table.add_row(
             "2. Environment Setup",
@@ -240,7 +268,7 @@ class NotebookGenerator:
         }
         table.add_row("5. Load Secrets", secrets_desc[self.environment])
         table.add_row("6. Environment Variables", "Configure settings and paths")
-        table.add_row("7. Import Libraries", "Import torch, Lightning, project modules")
+        table.add_row("7. Import Libraries", f"Import torch, Lightning, {self.version}.model")
 
         section_num = 8
         if self.features["widgets"]:
@@ -275,6 +303,7 @@ class NotebookGenerator:
         config_table.add_column("Value", style="green")
 
         config_table.add_row("Environment", self.environment.capitalize())
+        config_table.add_row("Version", self.version.upper())
         config_table.add_row("Batch Size", str(self.hyperparams["batch_size"]))
         config_table.add_row("Learning Rate", str(self.hyperparams["lr"]))
         config_table.add_row("Max Epochs", str(self.hyperparams["max_epochs"]))
@@ -307,11 +336,12 @@ class NotebookGenerator:
     def generate_title_cell(self) -> Dict:
         """Generate title and instructions."""
         env_name = self.environment.capitalize()
-        content = f"""# Deep Delta Learning - {env_name} Notebook
+        content = f"""# Deep Delta Learning - {env_name} Notebook ({self.version.upper()})
 
 This notebook provides a complete pipeline for training and inference with the Deep Delta Learning language model.
 
 **Model Architecture:** DeepLatentGPT with geometric erase-write updates
+**Model Version:** {self.version.upper()}
 **Dataset:** TinyStories (via Hugging Face datasets)
 **Framework:** PyTorch Lightning
 
@@ -519,7 +549,7 @@ print(f"  Dataset cache: {{dataset_cache}}")"""
 
     def generate_imports_cell(self) -> Dict:
         """Generate imports cell."""
-        code = """# Import required libraries
+        code = f"""# Import required libraries
 import sys
 import torch
 from transformers import AutoTokenizer
@@ -527,28 +557,38 @@ import lightning as L
 
 # Add project to path (environment detection)
 if 'KAGGLE_CONTAINER_NAME' in os.environ:
-    sys.path.insert(0, f'/kaggle/working/{repo_name}')
+    sys.path.insert(0, f'/kaggle/working/{{repo_name}}')
 elif 'COLAB_GPU' in os.environ:
-    sys.path.insert(0, f'/content/{repo_name}')
+    sys.path.insert(0, f'/content/{{repo_name}}')
 else:
     sys.path.insert(0, os.getcwd())
 
 from config import get_settings
 from data import WikiDataModule
-from v1.model import DeepLatentConfig, DeepLatentGPT
+from {self.version}.model import DeepLatentConfig, DeepLatentGPT
 
-print(f"PyTorch version: {torch.__version__}")
-print(f"Lightning version: {L.__version__}")
-print(f"CUDA available: {torch.cuda.is_available()}")
+print(f"PyTorch version: {{torch.__version__}}")
+print(f"Lightning version: {{L.__version__}}")
+print(f"CUDA available: {{torch.cuda.is_available()}}")
+print(f"Model version: {self.version}")
 if torch.cuda.is_available():
-    print(f"CUDA device: {torch.cuda.get_device_name(0)}")"""
+    print(f"CUDA device: {{torch.cuda.get_device_name(0)}}")"""
         return self.generate_code_cell(code)
 
     def generate_widget_cell(self) -> Dict:
-        """Generate interactive hyperparameter widgets."""
-        code = f"""# Interactive Hyperparameter Configuration
+        """Generate interactive hyperparameter widgets with optional timeout."""
+        code = f"""# Interactive Hyperparameter Configuration (Optional)
+# This cell provides interactive widgets for tuning hyperparameters.
+# If running in background or automated mode, it will auto-proceed after 30 seconds.
+
 import ipywidgets as widgets
-from IPython.display import display
+from IPython.display import display, HTML
+import threading
+import time
+
+# Flag to track if user interacted
+user_interacted = False
+auto_proceed_after = 30  # seconds
 
 # Create sliders
 lr_slider = widgets.FloatLogSlider(
@@ -598,22 +638,47 @@ n_embd_slider = widgets.IntSlider(
     style={{'description_width': 'initial'}}
 )
 
-display(lr_slider, batch_size_slider, epochs_slider, n_layer_slider, n_embd_slider)
+# Status display
+status_label = widgets.HTML(
+    value=f"<p style='color: #00d787;'>⏱ Adjust sliders within {{auto_proceed_after}} seconds, or they'll auto-apply with default values</p>"
+)
 
 # Apply widget values to environment
 def apply_hyperparams(change=None):
+    global user_interacted
+    user_interacted = True
     os.environ['LR'] = str(lr_slider.value)
     os.environ['BATCH_SIZE'] = str(batch_size_slider.value)
     os.environ['MAX_EPOCHS'] = str(epochs_slider.value)
     print(f"✓ Applied: LR={{lr_slider.value:.2e}}, Batch={{batch_size_slider.value}}, Epochs={{epochs_slider.value}}")
+
+# Auto-proceed timer
+def auto_proceed_timer():
+    for remaining in range(auto_proceed_after, 0, -1):
+        if user_interacted:
+            status_label.value = "<p style='color: #00d787;'>✓ User interaction detected - values will be applied</p>"
+            return
+        status_label.value = f"<p style='color: #ffa500;'>⏱ Auto-proceeding in {{remaining}} seconds (adjust sliders to customize)</p>"
+        time.sleep(1)
+
+    if not user_interacted:
+        apply_hyperparams()
+        status_label.value = "<p style='color: #00d787;'>✓ Auto-applied default values</p>"
 
 # Auto-apply on widget change
 lr_slider.observe(apply_hyperparams, names='value')
 batch_size_slider.observe(apply_hyperparams, names='value')
 epochs_slider.observe(apply_hyperparams, names='value')
 
-# Apply initial values
-apply_hyperparams()"""
+# Display widgets
+display(status_label)
+display(lr_slider, batch_size_slider, epochs_slider, n_layer_slider, n_embd_slider)
+
+# Start auto-proceed timer in background thread
+timer_thread = threading.Thread(target=auto_proceed_timer, daemon=True)
+timer_thread.start()
+
+print(f"Hyperparameter widgets ready. Default values will apply in {{auto_proceed_after}}s if unchanged.")"""
         return self.generate_code_cell(code)
 
     def generate_training_cells(self) -> List[Dict]:
@@ -893,7 +958,7 @@ print("─"*60)"""
     def write_notebook(self, notebook_json: Dict):
         """Write notebook JSON to .ipynb file."""
         # Generate filename
-        filename = f"deep_delta_learning_{self.environment}.ipynb"
+        filename = f"deep_delta_learning_{self.version}_{self.environment}.ipynb"
 
         # Determine output directory (current directory)
         output_dir = Path.cwd()
@@ -923,6 +988,7 @@ print("─"*60)"""
 
 [bold]Output:[/bold] {self.output_path}
 [bold]Environment:[/bold] {self.environment.capitalize()}
+[bold]Version:[/bold] {self.version.upper()}
 [bold]Size:[/bold] {self.output_path.stat().st_size / 1024:.1f} KB
 
 [bold cyan]Next Steps:[/bold cyan]
@@ -930,6 +996,7 @@ print("─"*60)"""
 {env_instructions[self.environment]}
 
 [bold cyan]Tips:[/bold cyan]
+• Model version: {self.version.upper()}
 • NUM_WORKERS is set to {self.get_environment_config()['num_workers']} (optimized for {self.environment})
 • Checkpoints saved to {self.get_environment_config()['checkpoint_dir']}
 • Secrets loading included: {secrets_info[self.environment]}
@@ -947,6 +1014,7 @@ print("─"*60)"""
         try:
             self.print_header()
             self.select_environment()
+            self.select_version()
             self.configure_features()
             self.configure_hyperparameters()
             self.preview_structure()
@@ -994,10 +1062,17 @@ Examples:
   # Generate directly for specific environment
   python scripts/generate_notebook.py --env colab
 
+  # Generate for specific environment and version
+  python scripts/generate_notebook.py --env colab --version v2
+
 Environment options:
   - kaggle: Optimized for Kaggle Notebooks
   - colab: Optimized for Google Colab
   - jupyter: Optimized for local Jupyter
+
+Version options:
+  - v1: Original Deep Latent GPT
+  - v2: Improved Deep Latent GPT (Recommended)
         """,
     )
     parser.add_argument(
@@ -1006,15 +1081,25 @@ Environment options:
         choices=["kaggle", "colab", "jupyter"],
         help="Target environment (skip interactive selection)",
     )
+    parser.add_argument(
+        "--version",
+        type=str,
+        choices=["v1", "v2"],
+        help="Model version (skip interactive selection)",
+    )
 
     args = parser.parse_args()
 
-    generator = NotebookGenerator(pre_selected_env=args.env)
+    generator = NotebookGenerator(pre_selected_env=args.env, pre_selected_version=args.version)
 
-    # Show pre-selected environment message
+    # Show pre-selected options
     if args.env:
         generator.console.print(
             f"[cyan]Pre-selected environment: {args.env.capitalize()}[/cyan]"
+        )
+    if args.version:
+        generator.console.print(
+            f"[cyan]Pre-selected version: {args.version.upper()}[/cyan]"
         )
 
     generator.run()

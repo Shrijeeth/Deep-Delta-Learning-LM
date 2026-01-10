@@ -653,8 +653,8 @@ class VMDeployer:
         )
         self.mode = mode
 
-        # Version selection (currently only v1, but structured for future)
-        version = Prompt.ask("Select version", choices=["v1"], default="v1")
+        # Version selection
+        version = Prompt.ask("Select version", choices=["v1", "v2"], default="v2")
         self.version = version
 
         self.console.print("[green]✓ Execution parameters set[/green]")
