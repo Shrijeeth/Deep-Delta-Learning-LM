@@ -162,6 +162,78 @@ What happens:
 
 ---
 
+## VM Deployment
+
+For deploying and running training on a remote Ubuntu VM, use the interactive deployment script:
+
+```bash
+# Interactive deployment with guided prompts
+python scripts/run_in_vm.py
+
+# Preview commands without executing (dry-run mode)
+python scripts/run_in_vm.py --dry-run
+```
+
+**Prerequisites:**
+
+- Install required libraries locally:
+
+  ```bash
+  pip install rich>=13.7.0 questionary>=2.0.0
+  ```
+
+- Have SSH access to an Ubuntu VM with a `.pem` private key file
+- VM should have Python 3.8+ installed
+
+**What the script does:**
+
+1. **Collects connection details**: VM ID (ubuntu@host) and PEM file path
+2. **Configures environment**: Interactive prompts for WandB logging and AWS S3 upload
+3. **Handles checkpoints**: Optionally transfers existing checkpoint for resuming training
+4. **Sets up VM**: Clones repository, creates virtual environment, installs dependencies
+5. **Starts training**: Runs training in a detached `screen` session so it persists after disconnection
+
+**Key features:**
+
+- Claude Code-style terminal UI with rich panels, tables, and progress indicators
+- **Interactive file picker with Tab autocomplete** for PEM files and checkpoints
+- Smart environment configuration (only prompts for optional features)
+- Automatic dependency installation on VM
+- Detached screen session (training continues after closing terminal)
+- Dry-run mode to preview all SSH/SCP commands before execution
+- Comprehensive error handling with actionable messages
+
+**After deployment:**
+
+Training runs in a screen session named `ddl-{mode}-{version}-{timestamp}`. To reconnect:
+
+```bash
+ssh -i <pem_file> ubuntu@host
+screen -ls                    # List all screen sessions
+screen -r ddl-train-v1-...    # Reconnect to training session
+# Press Ctrl+A then D to detach
+```
+
+Monitor training progress:
+
+- If WandB is enabled: Check your WandB dashboard for live metrics
+- Otherwise: Reconnect to the screen session to view logs
+
+**Example workflow:**
+
+```bash
+# First run: fresh training on VM
+python scripts/run_in_vm.py
+# Answer prompts: VM ID, PEM file, enable WandB, select train mode, etc.
+
+# Later: resume training from checkpoint
+python scripts/run_in_vm.py
+# When asked about resuming, select Yes and provide checkpoint path
+# Script transfers checkpoint and configures VM to resume training
+```
+
+---
+
 ## Roadmap ideas
 
 - Experiment with deeper stacks / scaling laws under delta gating
