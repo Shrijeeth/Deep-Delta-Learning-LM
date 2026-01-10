@@ -20,7 +20,7 @@ def run_inference():
     MAX_NEW_TOKENS = 50
     TEMPERATURE = 1.0
     TOP_K = 50  # e.g., 50 for top-k sampling
-    REPETITION_PENALTY = 1.0
+    REPETITION_PENALTY = 1.1
     # --------------------------------
 
     tokenizer = AutoTokenizer.from_pretrained(settings.TOKENIZER_NAME)
@@ -55,7 +55,6 @@ def run_inference():
         repetition_penalty=REPETITION_PENALTY,
         debug=True,
     )
-    print(output_ids)
     output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
 
     print(f"\nPrompt: {PROMPT}\n---\n{output_text}\n")

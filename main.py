@@ -19,6 +19,15 @@ def main(
             from v1.inference import run_inference
 
             run_inference()
+    elif version == "v2":
+        if mode == "train":
+            from v2.train import train
+
+            train()
+        elif mode == "inference":
+            from v2.inference import run_inference
+
+            run_inference()
     else:
         raise ValueError(f"Unknown version: {version}")
 
