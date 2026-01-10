@@ -234,6 +234,69 @@ python scripts/run_in_vm.py
 
 ---
 
+## Jupyter Notebook Generation
+
+For running training in Kaggle, Google Colab, or local Jupyter environments, use the interactive notebook generator:
+
+```bash
+# Interactive notebook generation with guided prompts
+python scripts/generate_notebook.py
+
+# Generate directly for specific environment
+python scripts/generate_notebook.py --env colab
+```
+
+**What the script does:**
+
+1. **Selects environment**: Kaggle, Google Colab, or local Jupyter
+2. **Configures features**: Training pipeline, inference, and interactive hyperparameter widgets
+3. **Customizes settings**: Learning rate, batch size, epochs, etc.
+4. **Generates notebook**: Creates optimized .ipynb file for your environment
+
+**Generated notebook includes:**
+
+- Environment-specific setup instructions (GPU enablement, paths)
+- Dependency installation from requirements.txt
+- GitHub repository cloning
+- **Platform-specific secrets loading** (Kaggle Secrets, Colab userdata, or .env files)
+- Interactive hyperparameter configuration with ipywidgets
+- Complete training pipeline with Lightning progress tracking
+- Checkpoint loading and text generation
+- Markdown documentation for each step
+
+**Example workflow:**
+
+```bash
+python scripts/generate_notebook.py
+# Select: Google Colab
+# Enable: Training, Inference, Hyperparameter Widgets
+# Customize: Learning rate, batch size, epochs
+# Output: deep_delta_learning_colab.ipynb
+```
+
+Then upload the generated notebook to Kaggle/Colab or open in Jupyter and run cells sequentially.
+
+**Key features:**
+
+- NUM_WORKERS automatically set to 0 for Kaggle/Colab (required for notebooks)
+- Environment-specific checkpoint paths (no Drive mounting for Colab)
+- Optimized batch sizes for GPU memory constraints
+- Interactive widgets for real-time hyperparameter tuning
+
+**Secrets management:**
+
+Each platform has different ways to manage sensitive credentials (API keys, tokens, etc.):
+
+- **Kaggle**: Secrets are loaded from Kaggle Secrets (Settings → Add-ons → Secrets). Add your keys like `WANDB_API_KEY`, `AWS_ACCESS_KEY_ID`, etc. The notebook automatically loads them using `kaggle_secrets.UserSecretsClient()`.
+
+- **Google Colab**: Secrets are loaded from Colab userdata (🔑 icon in left sidebar). Add your secrets and enable "Notebook access" for each. The notebook loads them using `google.colab.userdata.get()`.
+
+- **Local Jupyter**: Secrets are loaded from a `.env` file in the project root. Create a `.env` file with `KEY=VALUE` pairs (e.g., `WANDB_API_KEY=your_key_here`). The notebook includes a custom loader that parses this file.
+
+Supported secret keys: `WANDB_API_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `HF_TOKEN` (Hugging Face token), and any other custom keys you need.
+
+---
+
 ## Roadmap ideas
 
 - Experiment with deeper stacks / scaling laws under delta gating
