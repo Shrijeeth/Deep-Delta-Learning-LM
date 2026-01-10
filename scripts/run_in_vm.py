@@ -142,7 +142,6 @@ class VMDeployer:
             result = questionary.path(
                 "",  # Empty prompt (message shown above)
                 default=default_path,
-                only_files=True,
                 style=self.questionary_style,
             ).ask()
 
@@ -211,6 +210,14 @@ class VMDeployer:
 
             if message:  # Warning about permissions
                 self.console.print(f"[yellow]{message}[/yellow]")
+                if Confirm.ask("Fix permissions automatically?", default=True):
+                    try:
+                        os.chmod(pem_file, 0o400)
+                        self.console.print(f"[green]✓ Fixed permissions to 400[/green]")
+                    except Exception as e:
+                        self.console.print(f"[red]✗ Failed to fix permissions: {e}[/red]")
+                        if not Confirm.ask("Continue anyway?", default=False):
+                            continue
 
             break
 
@@ -236,6 +243,26 @@ class VMDeployer:
     def build_env_config(self):
         """Build environment configuration interactively."""
         self.console.print("\n[bold cyan]Step 2: Environment Configuration[/bold cyan]")
+
+        # Check if user has an existing .env file
+        project_root = Path(__file__).parent.parent
+        local_env_path = project_root / ".env"
+
+        if local_env_path.exists():
+            if Confirm.ask(
+                "Found existing .env file. Use it instead of configuring manually?",
+                default=True
+            ):
+                self.console.print("[cyan]Loading configuration from .env file...[/cyan]")
+                self.env_config = {}
+                with open(local_env_path, "r") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            key, value = line.split("=", 1)
+                            self.env_config[key.strip()] = value.strip()
+                self.console.print("[green]✓ Loaded configuration from .env file[/green]")
+                return
 
         # Load base config from .env.sample
         try:
@@ -390,6 +417,23 @@ class VMDeployer:
         ckpt_filename = os.path.basename(self.checkpoint_path)
         remote_ckpt_path = f"{remote_dir}/{ckpt_filename}"
 
+        # Check if checkpoint already exists on VM
+        returncode, stdout, _ = self.ssh_command(
+            f"test -f {remote_ckpt_path} && echo exists",
+            "Checking for existing checkpoint"
+        )
+
+        if "exists" in stdout:
+            self.console.print(
+                f"[yellow]Checkpoint {ckpt_filename} already exists on VM[/yellow]"
+            )
+            if Confirm.ask("Skip upload and use existing checkpoint?", default=True):
+                self.remote_checkpoint_path = f"{CHECKPOINT_DIR}/{ckpt_filename}"
+                self.console.print(
+                    f"[green]✓ Using existing checkpoint at {remote_ckpt_path}[/green]"
+                )
+                return
+
         # Transfer checkpoint
         size_mb = os.path.getsize(self.checkpoint_path) / (1024 * 1024)
         returncode = self.scp_transfer(
@@ -413,9 +457,9 @@ class VMDeployer:
             "\n[bold cyan]Step 4: Setting up repository on VM[/bold cyan]"
         )
 
-        # Check if repo exists
+        # Check if it's a valid git repository (not just a directory)
         returncode, stdout, _ = self.ssh_command(
-            f"test -d {PROJECT_DIR} && echo exists", "Checking for existing repository"
+            f"test -d {PROJECT_DIR}/.git && echo exists", "Checking for existing repository"
         )
 
         repo_exists = "exists" in stdout
@@ -431,13 +475,70 @@ class VMDeployer:
                 self.console.print(
                     f"[yellow]Warning: git pull failed: {stderr}[/yellow]"
                 )
-        else:
-            self.console.print("Cloning repository...")
-            returncode, _, stderr = self.ssh_command(
-                f"git clone {REPO_URL}", "Cloning repository"
+                # If pull fails, ask if we should re-clone
+                if Confirm.ask(
+                    "Git pull failed. Remove existing directory and clone fresh?",
+                    default=True
+                ):
+                    self.console.print("[yellow]Removing existing directory...[/yellow]")
+                    self.ssh_command(f"rm -rf {PROJECT_DIR}", "Removing directory")
+                    repo_exists = False
+
+        if not repo_exists:
+            # Check if directory exists (but is not a git repo)
+            returncode, stdout, _ = self.ssh_command(
+                f"test -d {PROJECT_DIR} && echo exists"
             )
-            if returncode != 0 and not self.dry_run:
-                raise VMDeploymentError(f"Failed to clone repository: {stderr}")
+
+            if "exists" in stdout:
+                self.console.print(
+                    f"[yellow]Directory {PROJECT_DIR} exists but is not a git repository[/yellow]"
+                )
+
+                # Create temporary backup location for checkpoints only
+                temp_backup = f"/tmp/ddl_backup_$(date +%s)"
+
+                # Move checkpoint to temp location if it exists
+                backup_cmds = [
+                    f"mkdir -p {temp_backup}",
+                    f"[ -d {PROJECT_DIR}/{CHECKPOINT_DIR} ] && mv {PROJECT_DIR}/{CHECKPOINT_DIR} {temp_backup}/ || true"
+                ]
+
+                for cmd in backup_cmds:
+                    self.ssh_command(cmd)
+
+                # Remove the directory
+                self.console.print("[yellow]Removing existing directory...[/yellow]")
+                returncode, _, stderr = self.ssh_command(
+                    f"rm -rf {PROJECT_DIR}", "Removing directory"
+                )
+                if returncode != 0 and not self.dry_run:
+                    raise VMDeploymentError(f"Failed to remove directory: {stderr}")
+
+                # Clone fresh
+                self.console.print("Cloning repository...")
+                returncode, _, stderr = self.ssh_command(
+                    f"git clone {REPO_URL}", "Cloning repository"
+                )
+                if returncode != 0 and not self.dry_run:
+                    raise VMDeploymentError(f"Failed to clone repository: {stderr}")
+
+                # Restore backed up checkpoint
+                restore_cmds = [
+                    f"[ -d {temp_backup}/{CHECKPOINT_DIR} ] && mv {temp_backup}/{CHECKPOINT_DIR} {PROJECT_DIR}/ || true",
+                    f"rm -rf {temp_backup}"
+                ]
+
+                for cmd in restore_cmds:
+                    self.ssh_command(cmd)
+            else:
+                # Directory doesn't exist, just clone
+                self.console.print("Cloning repository...")
+                returncode, _, stderr = self.ssh_command(
+                    f"git clone {REPO_URL}", "Cloning repository"
+                )
+                if returncode != 0 and not self.dry_run:
+                    raise VMDeploymentError(f"Failed to clone repository: {stderr}")
 
         self.console.print("[green]✓ Repository ready[/green]")
 
@@ -445,25 +546,33 @@ class VMDeployer:
         """Install dependencies on VM."""
         self.console.print("\n[bold cyan]Installing dependencies on VM[/bold cyan]")
 
-        # Check if venv exists
-        returncode, stdout, _ = self.ssh_command(
-            f"test -d {PROJECT_DIR}/venv && echo exists"
+        # Check if Python 3 is installed
+        returncode, stdout, stderr = self.ssh_command(
+            "python3 --version", "Checking Python 3 installation"
         )
+        if returncode != 0 and not self.dry_run:
+            raise VMDeploymentError(
+                f"Python 3 not found on VM. Please install it first. Error: {stderr}"
+            )
+        else:
+            if stdout.strip():
+                self.console.print(f"[green]✓ Found {stdout.strip()}[/green]")
 
-        venv_exists = "exists" in stdout
-
-        if not venv_exists:
-            self.console.print("Creating virtual environment...")
+        # Check if pip is installed
+        returncode, stdout, _ = self.ssh_command("python3 -m pip --version")
+        if returncode != 0 and not self.dry_run:
+            self.console.print("[yellow]Installing pip...[/yellow]")
             returncode, _, stderr = self.ssh_command(
-                f"cd {PROJECT_DIR} && python3 -m venv venv",
-                "Creating virtual environment",
+                "sudo apt-get update && sudo apt-get install -y python3-pip",
+                "Installing pip",
             )
             if returncode != 0 and not self.dry_run:
-                raise VMDeploymentError(f"Failed to create venv: {stderr}")
+                raise VMDeploymentError(f"Failed to install pip: {stderr}")
 
-        # Install dependencies
+        # Install dependencies directly (no venv)
+        self.console.print("[cyan]Installing Python dependencies directly to user site-packages...[/cyan]")
         returncode, _, stderr = self.ssh_command(
-            f"cd {PROJECT_DIR} && source venv/bin/activate && pip install -r requirements.txt",
+            f"cd {PROJECT_DIR} && python3 -m pip install --user -r requirements.txt",
             "Installing Python dependencies (this may take a few minutes)",
         )
         if returncode != 0 and not self.dry_run:
@@ -489,11 +598,16 @@ class VMDeployer:
         )
 
         # Update env config with IS_RESUME and CHECKPOINT_PATH
+        # Always override these values for VM deployment
         self.env_config["IS_RESUME"] = str(self.is_resume).lower()
         if self.is_resume and self.remote_checkpoint_path:
             self.env_config["CHECKPOINT_PATH"] = self.remote_checkpoint_path
+            self.console.print(
+                f"[cyan]Setting CHECKPOINT_PATH to: {self.remote_checkpoint_path}[/cyan]"
+            )
         else:
             self.env_config["CHECKPOINT_PATH"] = ""
+            self.console.print("[cyan]Clearing CHECKPOINT_PATH (no resume)[/cyan]")
 
         # Write to temp file
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -565,8 +679,8 @@ class VMDeployer:
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         session_name = f"ddl-{self.mode}-{self.version}-{timestamp}"
 
-        # Build training command
-        train_cmd = f"cd {PROJECT_DIR} && source venv/bin/activate && python main.py --version {self.version} --mode {self.mode}"
+        # Build training command (no venv activation needed)
+        train_cmd = f"cd {PROJECT_DIR} && python3 main.py --version {self.version} --mode {self.mode}"
 
         # Create screen session with training command
         screen_cmd = f'screen -dmS {session_name} bash -c "{train_cmd}"'
