@@ -148,14 +148,14 @@ class NotebookGenerator:
 
     def configure_features(self):
         """Step 2: Feature selection."""
-        self.console.print("\n[bold cyan]Step 2: Configure Notebook Features[/bold cyan]")
+        self.console.print(
+            "\n[bold cyan]Step 2: Configure Notebook Features[/bold cyan]"
+        )
 
         features = questionary.checkbox(
             "Select features to include (use Space to select, Enter to confirm):",
             choices=[
-                questionary.Choice(
-                    "Training Pipeline", checked=True, value="training"
-                ),
+                questionary.Choice("Training Pipeline", checked=True, value="training"),
                 questionary.Choice(
                     "Inference & Generation", checked=True, value="inference"
                 ),
@@ -183,16 +183,12 @@ class NotebookGenerator:
 
     def configure_hyperparameters(self):
         """Step 3: Hyperparameter configuration."""
-        self.console.print(
-            "\n[bold cyan]Step 3: Customize Hyperparameters[/bold cyan]"
-        )
+        self.console.print("\n[bold cyan]Step 3: Customize Hyperparameters[/bold cyan]")
 
         # Get defaults based on environment
         defaults = self.get_environment_defaults()
 
-        self.console.print(
-            "[dim]Press Enter to use defaults shown in brackets[/dim]\n"
-        )
+        self.console.print("[dim]Press Enter to use defaults shown in brackets[/dim]\n")
 
         self.hyperparams = {
             "batch_size": int(
@@ -203,11 +199,14 @@ class NotebookGenerator:
                 Prompt.ask("Max epochs", default=str(defaults["max_epochs"]))
             ),
             "block_size": int(
-                Prompt.ask("Block size (context length)", default=str(defaults["block_size"]))
+                Prompt.ask(
+                    "Block size (context length)", default=str(defaults["block_size"])
+                )
             ),
             "data_length": int(
                 Prompt.ask(
-                    "Data length (tokenization max)", default=str(defaults["data_length"])
+                    "Data length (tokenization max)",
+                    default=str(defaults["data_length"]),
                 )
             ),
         }
@@ -227,7 +226,8 @@ class NotebookGenerator:
             f"Project overview for {self.environment.capitalize()}",
         )
         table.add_row(
-            "2. Environment Setup", f"{self.environment.capitalize()}-specific instructions"
+            "2. Environment Setup",
+            f"{self.environment.capitalize()}-specific instructions",
         )
         table.add_row("3. Install Dependencies", "pip install from requirements.txt")
         table.add_row("4. Clone Repository", f"Git clone {self.repo_url}")
@@ -236,7 +236,7 @@ class NotebookGenerator:
         secrets_desc = {
             "kaggle": "Load secrets from Kaggle Secrets (WANDB, AWS, etc.)",
             "colab": "Load secrets from Colab userdata (WANDB, AWS, etc.)",
-            "jupyter": "Load secrets from .env file (WANDB, AWS, etc.)"
+            "jupyter": "Load secrets from .env file (WANDB, AWS, etc.)",
         }
         table.add_row("5. Load Secrets", secrets_desc[self.environment])
         table.add_row("6. Environment Variables", "Configure settings and paths")
@@ -321,7 +321,9 @@ Generated with the interactive notebook generator from [{REPO_NAME}]({self.repo_
     def generate_setup_instructions_cell(self) -> Dict:
         """Generate environment-specific setup instructions."""
         env_config = self.get_environment_config()
-        content = "## Environment Setup\n\n**Important:** Before running this notebook:\n\n"
+        content = (
+            "## Environment Setup\n\n**Important:** Before running this notebook:\n\n"
+        )
         for instruction in env_config["setup_instructions"]:
             content += f"- {instruction}\n"
 
@@ -841,9 +843,7 @@ print("─"*60)"""
 
         # 8. Widgets (if enabled)
         if self.features["widgets"]:
-            cells.append(
-                self.generate_markdown_cell("## Hyperparameter Configuration")
-            )
+            cells.append(self.generate_markdown_cell("## Hyperparameter Configuration"))
             cells.append(self.generate_widget_cell())
 
         # 9. Training (if enabled)
@@ -903,9 +903,7 @@ print("─"*60)"""
         with open(self.output_path, "w", encoding="utf-8") as f:
             json.dump(notebook_json, f, indent=2, ensure_ascii=False)
 
-        self.console.print(
-            f"\n[green]✓ Notebook written to {self.output_path}[/green]"
-        )
+        self.console.print(f"\n[green]✓ Notebook written to {self.output_path}[/green]")
 
     def show_success_message(self):
         """Display success message and next steps."""
@@ -918,7 +916,7 @@ print("─"*60)"""
         secrets_info = {
             "kaggle": "Add secrets in Kaggle Settings → Secrets",
             "colab": "Add secrets via 🔑 icon in left sidebar",
-            "jupyter": "Create .env file with KEY=VALUE format"
+            "jupyter": "Create .env file with KEY=VALUE format",
         }
 
         instructions = f"""[bold cyan]Notebook Generated Successfully![/bold cyan]

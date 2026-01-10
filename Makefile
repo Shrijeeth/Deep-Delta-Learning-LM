@@ -33,6 +33,10 @@ check-all:
 	@ruff check .
 	@isort . --check-only
 
+verify-data:
+	@echo "Verifying data..."
+	@python scripts/verify_data.py
+
 clean:
 	@echo "Cleaning up..."
 	@find . -type d -name "__pycache__" -exec rm -rf {} +

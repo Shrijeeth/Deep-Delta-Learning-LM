@@ -45,13 +45,47 @@ optimization stability and expressivity—especially for deeper stacks.
   none on biases/LayerNorm), betas (0.9, 0.95); gradient clipping handled by the Trainer; LR comes
   from `config.py`. Perplexity is tracked during train/val.  
 - **Data:** TinyStories via Hugging Face `datasets`, tokenized with `AutoTokenizer` (defaults to `gpt2`).
-  Dynamic padding via `DataCollatorForLanguageModeling`.  
+  **Custom collate function** properly shifts labels for causal LM (`labels[i] = input_ids[i+1]`).  
 - **Generation:** `DeepLatentGPT.generate` supports temperature, top-k, and repetition penalty.  
 - **Logging/ckpts:** Optional Weights & Biases logging, Lightning checkpoints kept in
   `checkpoints_deeplatent/`.
 
 Key code: `v1/model.py` (architecture + delta math), `v1/train.py` (orchestration), `data.py`
-(TinyStories datamodule), `config.py` (env-driven settings).
+(TinyStories datamodule with proper label shifting), `config.py` (env-driven settings).
+
+---
+
+## Model v2 (Improved)
+
+**v2** includes critical fixes and improvements to prevent model collapse:
+
+- **Better gate initialization:** `beta_init=-1.0` (less conservative than v1's `-2.0`) allows gates to learn faster
+- **Label smoothing:** `label_smoothing=0.1` prevents overconfident predictions and improves generalization
+- **Separate checkpoints:** Saved to `checkpoints_deeplatent_v2/` to avoid conflicts with v1
+- **WandB tracking:** Logged as `deep-delta-v2` for easy comparison
+
+**Why v2?** Early experiments showed v1 could suffer from model collapse (predicting only common tokens like spaces) due to overly conservative gate initialization. v2's improvements lead to more stable training and better generation quality.
+
+---
+
+## Critical Bug Fixes (Data Preparation)
+
+**Issue:** Original data preparation did not properly shift labels for causal language modeling, causing the model to learn an incorrect objective (predicting current token instead of next token).
+
+**Fix:** Custom `collate_fn` in `data.py` now:
+
+1. **Shifts labels correctly:** `labels[i] = input_ids[i+1]` (predict next token)
+2. **Sets ignore tokens:** Last position and padding set to `-100` (ignored in loss)
+3. **Dynamic padding:** Pads to batch maximum length (more efficient than global padding)
+
+**Benefits:**
+
+- ✅ Correct causal LM objective
+- ✅ Variable sequence lengths (efficient training on short stories)
+- ✅ Less padding overhead
+- ✅ Better GPU utilization
+
+**Verification:** Run `python scripts/verify_data.py` to confirm labels are properly shifted.
 
 ---
 
@@ -92,41 +126,66 @@ Environment variables (see `config.py`):
 
 ## Training
 
+**Recommended:** Use v2 for better stability and generation quality:
+
 ```bash
-# Run the CLI entrypoint (loads .env and dispatches by version/mode)
+# Train v2 (improved hyperparameters + label smoothing)
+python main.py --version v2 --mode train
+```
+
+Or train v1 (original paper implementation):
+
+```bash
+# Train v1 (conservative gate initialization)
 python main.py --version v1 --mode train
 ```
 
 What happens:
 
 1. Seeds everything, sets matmul precision high.
-2. Builds TinyStories datamodule with dynamic padding.
+2. Builds TinyStories datamodule with **proper label shifting** for causal LM.
 3. Instantiates `DeepLatentGPT` with the delta blocks.
 4. Runs Lightning Trainer with checkpointing, LR monitor, optional WandB logger, and a wall-clock cap (`max_time`) set via `MAX_TRAINING_HOURS`.
 
-To resume:
+**⚠️ Important:** Checkpoints trained before the data preparation fix (label shifting) will not work correctly. Delete old checkpoints and retrain:
 
 ```bash
-IS_RESUME=true CHECKPOINT_PATH=checkpoints_deeplatent/last.ckpt python main.py --version v1
+rm -rf v1/checkpoints/*.ckpt checkpoints_deeplatent/*.ckpt
+```
+
+To resume training:
+
+```bash
+# v2
+IS_RESUME=true CHECKPOINT_PATH=checkpoints_deeplatent_v2/last.ckpt python main.py --version v2 --mode train
+
+# v1
+IS_RESUME=true CHECKPOINT_PATH=checkpoints_deeplatent/last.ckpt python main.py --version v1 --mode train
 ```
 
 ---
 
 ## Inference (generation)
 
-`v1/inference.py` is a lightweight helper; typical flow:
+Both v1 and v2 have inference scripts. **Recommended:** Use v2 for better generation quality.
 
 ```python
-from v1.inference import run_inference
+# v2 (recommended)
+from v2.inference import run_inference
+run_inference()
 
-# Adjust defaults inside v1/inference.py (PROMPT, CHECKPOINT_PATH, MAX_NEW_TOKENS,
-# TEMPERATURE, TOP_K, REPETITION_PENALTY) or set CHECKPOINT_PATH via .env.
+# v1
+from v1.inference import run_inference
 run_inference()
 ```
 
-CLI inference (uses defaults in `v1/inference.py` and `CHECKPOINT_PATH` from .env):
+CLI inference:
 
 ```bash
+# v2 (recommended)
+python main.py --version v2 --mode inference
+
+# v1
 python main.py --version v1 --mode inference
 ```
 
@@ -135,18 +194,36 @@ What happens:
 1. Loads settings from `.env` (tokenizer name, block size, checkpoint path, etc.).
 2. Builds `DeepLatentGPT` with `DeepLatentConfig` using `BLOCK_SIZE` from settings and tokenizer vocab.
 3. Loads the checkpoint at `CHECKPOINT_PATH` (errors if missing).
-4. Generates with temperature, top-k, and repetition penalty settings defined in `v1/inference.py`.
+4. Sets model to **eval mode** (disables dropout).
+5. Generates with temperature, top-k, and repetition penalty settings defined in the inference script.
+
+**Expected behavior:**
+
+- **Healthy model:** Generates coherent stories with proper grammar and narrative flow
+- **Model collapse:** Generates repetitive tokens (e.g., only spaces) or nonsensical text
+  - If this happens, the checkpoint may be corrupted or trained with the old (buggy) data preparation
+  - Solution: Delete checkpoints and retrain with the fixed data pipeline
+
+**Hyperparameter recommendations:**
+
+- `TEMPERATURE`: 0.8-1.0 (lower = more deterministic)
+- `TOP_K`: 40-50 (standard for text generation)
+- `REPETITION_PENALTY`: 1.0-1.2 (1.0 = no penalty, >1.0 reduces repetition)
 
 ---
 
 ## Project layout
 
-- `v1/model.py` — Deep Delta blocks, GPT backbone, Lightning module
-- `v1/train.py` — training script + Trainer setup
+- `v1/model.py` — Deep Delta blocks, GPT backbone, Lightning module (original)
+- `v1/train.py` — training script + Trainer setup (original)
+- `v1/inference.py` — checkpoint-loading inference helper (original)
+- `v2/model.py` — Improved Deep Delta with better hyperparameters
+- `v2/train.py` — training script for v2 (label smoothing, better beta_init)
+- `v2/inference.py` — inference helper for v2
 - `main.py` — CLI entrypoint that loads `.env` and routes to a versioned trainer
-- `v1/inference.py` — checkpoint-loading inference helper (temperature/top-k/repetition penalty)
-- `data.py` — TinyStories datamodule (tokenize, block, pad)
+- `data.py` — TinyStories datamodule with **proper label shifting** for causal LM
 - `config.py` — environment-driven hyperparameters
+- `scripts/verify_data.py` — verification script to check label alignment
 - `Makefile` — install/format/lint helpers
 
 ---

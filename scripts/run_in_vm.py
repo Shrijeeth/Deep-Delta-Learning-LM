@@ -213,9 +213,11 @@ class VMDeployer:
                 if Confirm.ask("Fix permissions automatically?", default=True):
                     try:
                         os.chmod(pem_file, 0o400)
-                        self.console.print(f"[green]✓ Fixed permissions to 400[/green]")
+                        self.console.print("[green]✓ Fixed permissions to 400[/green]")
                     except Exception as e:
-                        self.console.print(f"[red]✗ Failed to fix permissions: {e}[/red]")
+                        self.console.print(
+                            f"[red]✗ Failed to fix permissions: {e}[/red]"
+                        )
                         if not Confirm.ask("Continue anyway?", default=False):
                             continue
 
@@ -251,9 +253,11 @@ class VMDeployer:
         if local_env_path.exists():
             if Confirm.ask(
                 "Found existing .env file. Use it instead of configuring manually?",
-                default=True
+                default=True,
             ):
-                self.console.print("[cyan]Loading configuration from .env file...[/cyan]")
+                self.console.print(
+                    "[cyan]Loading configuration from .env file...[/cyan]"
+                )
                 self.env_config = {}
                 with open(local_env_path, "r") as f:
                     for line in f:
@@ -261,7 +265,9 @@ class VMDeployer:
                         if line and not line.startswith("#") and "=" in line:
                             key, value = line.split("=", 1)
                             self.env_config[key.strip()] = value.strip()
-                self.console.print("[green]✓ Loaded configuration from .env file[/green]")
+                self.console.print(
+                    "[green]✓ Loaded configuration from .env file[/green]"
+                )
                 return
 
         # Load base config from .env.sample
@@ -420,7 +426,7 @@ class VMDeployer:
         # Check if checkpoint already exists on VM
         returncode, stdout, _ = self.ssh_command(
             f"test -f {remote_ckpt_path} && echo exists",
-            "Checking for existing checkpoint"
+            "Checking for existing checkpoint",
         )
 
         if "exists" in stdout:
@@ -459,7 +465,8 @@ class VMDeployer:
 
         # Check if it's a valid git repository (not just a directory)
         returncode, stdout, _ = self.ssh_command(
-            f"test -d {PROJECT_DIR}/.git && echo exists", "Checking for existing repository"
+            f"test -d {PROJECT_DIR}/.git && echo exists",
+            "Checking for existing repository",
         )
 
         repo_exists = "exists" in stdout
@@ -478,9 +485,11 @@ class VMDeployer:
                 # If pull fails, ask if we should re-clone
                 if Confirm.ask(
                     "Git pull failed. Remove existing directory and clone fresh?",
-                    default=True
+                    default=True,
                 ):
-                    self.console.print("[yellow]Removing existing directory...[/yellow]")
+                    self.console.print(
+                        "[yellow]Removing existing directory...[/yellow]"
+                    )
                     self.ssh_command(f"rm -rf {PROJECT_DIR}", "Removing directory")
                     repo_exists = False
 
@@ -496,12 +505,12 @@ class VMDeployer:
                 )
 
                 # Create temporary backup location for checkpoints only
-                temp_backup = f"/tmp/ddl_backup_$(date +%s)"
+                temp_backup = "/tmp/ddl_backup_$(date +%s)"
 
                 # Move checkpoint to temp location if it exists
                 backup_cmds = [
                     f"mkdir -p {temp_backup}",
-                    f"[ -d {PROJECT_DIR}/{CHECKPOINT_DIR} ] && mv {PROJECT_DIR}/{CHECKPOINT_DIR} {temp_backup}/ || true"
+                    f"[ -d {PROJECT_DIR}/{CHECKPOINT_DIR} ] && mv {PROJECT_DIR}/{CHECKPOINT_DIR} {temp_backup}/ || true",
                 ]
 
                 for cmd in backup_cmds:
@@ -526,7 +535,7 @@ class VMDeployer:
                 # Restore backed up checkpoint
                 restore_cmds = [
                     f"[ -d {temp_backup}/{CHECKPOINT_DIR} ] && mv {temp_backup}/{CHECKPOINT_DIR} {PROJECT_DIR}/ || true",
-                    f"rm -rf {temp_backup}"
+                    f"rm -rf {temp_backup}",
                 ]
 
                 for cmd in restore_cmds:
@@ -570,7 +579,9 @@ class VMDeployer:
                 raise VMDeploymentError(f"Failed to install pip: {stderr}")
 
         # Install dependencies directly (no venv)
-        self.console.print("[cyan]Installing Python dependencies directly to user site-packages...[/cyan]")
+        self.console.print(
+            "[cyan]Installing Python dependencies directly to user site-packages...[/cyan]"
+        )
         returncode, _, stderr = self.ssh_command(
             f"cd {PROJECT_DIR} && python3 -m pip install --user -r requirements.txt",
             "Installing Python dependencies (this may take a few minutes)",

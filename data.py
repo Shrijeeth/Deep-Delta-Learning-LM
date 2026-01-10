@@ -1,7 +1,8 @@
 import lightning as L
+import torch
 from datasets import load_dataset
 from torch.utils.data import DataLoader
-from transformers import AutoTokenizer, DataCollatorForLanguageModeling
+from transformers import AutoTokenizer
 
 from config import get_settings
 
@@ -21,6 +22,30 @@ class WikiDataModule(L.LightningDataModule):
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
+    def collate_fn(self, examples):
+        """Custom collator that properly shifts labels for causal LM"""
+        # Pad sequences
+        input_ids = [torch.tensor(ex["input_ids"]) for ex in examples]
+        input_ids = torch.nn.utils.rnn.pad_sequence(
+            input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id
+        )
+
+        # Create shifted labels: labels[i] = input_ids[i+1]
+        labels = input_ids.clone()
+        labels[:, :-1] = input_ids[:, 1:]  # Shift left
+        labels[:, -1] = -100  # Last position has no next token
+
+        # Also set padding positions to -100
+        labels[labels == self.tokenizer.pad_token_id] = -100
+
+        attention_mask = (input_ids != self.tokenizer.pad_token_id).long()
+
+        return {
+            "input_ids": input_ids,
+            "labels": labels,
+            "attention_mask": attention_mask,
+        }
+
     def prepare_data(self):
         self.dataset = load_dataset("roneneldan/TinyStories")
 
@@ -30,9 +55,12 @@ class WikiDataModule(L.LightningDataModule):
 
         # 2. Define the tokenizer logic
         def tokenize_function(examples):
-            # We truncate here to ensure no sequence exceeds our max memory
+            # Tokenize with truncation to max_length
             return self.tokenizer(
-                examples["text"], truncation=False, max_length=self.max_length
+                examples["text"],
+                truncation=True,
+                max_length=self.max_length,
+                padding=False,
             )
 
         # 3. Apply tokenization (Map)
@@ -41,37 +69,11 @@ class WikiDataModule(L.LightningDataModule):
             tokenize_function, batched=True, remove_columns=["text"]
         )
 
-        def group_texts(examples):
-            concatenated = {}
-            for key in examples.keys():
-                concatenated[key] = sum(examples[key], [])
-            return concatenated
+        # 4. Filter out sequences that are too short
+        def filter_short(example):
+            return len(example["input_ids"]) > 10
 
-        tokenized_datasets = tokenized_datasets.map(group_texts, batched=True)
-
-        def split_into_blocks(examples):
-            input_ids = examples["input_ids"]
-            total_length = (len(input_ids) // self.max_length) * self.max_length
-            input_ids = input_ids[:total_length]
-
-            return {
-                "input_ids": [
-                    input_ids[i : i + self.max_length]
-                    for i in range(0, total_length, self.max_length)
-                ]
-            }
-
-        tokenized_datasets = tokenized_datasets.map(
-            split_into_blocks,
-            batched=True,
-            remove_columns=tokenized_datasets["train"].column_names,
-        )
-
-        # 4. Filter out empty sequences (this is the fix!)
-        def filter_empty(example):
-            return len(example["input_ids"]) > 0
-
-        tokenized_datasets = tokenized_datasets.filter(filter_empty)
+        tokenized_datasets = tokenized_datasets.filter(filter_short)
 
         # 5. Split for training phases
         if stage == "fit" or stage is None:
@@ -87,8 +89,7 @@ class WikiDataModule(L.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=True,  # Always shuffle training data!
             num_workers=self.num_workers,
-            # This is where Dynamic Padding happens:
-            collate_fn=DataCollatorForLanguageModeling(self.tokenizer, mlm=False),
+            collate_fn=self.collate_fn,  # Custom collator with proper label shifting
             pin_memory=True,  # Speed boost for data transfer to GPU
         )
 
@@ -97,7 +98,7 @@ class WikiDataModule(L.LightningDataModule):
             self.val_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            collate_fn=DataCollatorForLanguageModeling(self.tokenizer, mlm=False),
+            collate_fn=self.collate_fn,  # Custom collator with proper label shifting
             pin_memory=True,
         )
 
@@ -106,6 +107,6 @@ class WikiDataModule(L.LightningDataModule):
             self.test_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            collate_fn=DataCollatorForLanguageModeling(self.tokenizer, mlm=False),
+            collate_fn=self.collate_fn,  # Custom collator with proper label shifting
             pin_memory=True,
         )
