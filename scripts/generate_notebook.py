@@ -42,7 +42,6 @@ class NotebookGenerator:
         self.features: Dict[str, bool] = {
             "training": True,
             "inference": True,
-            "widgets": True,
         }
         self.hyperparams: Dict[str, any] = {}
         self.output_path: Optional[Path] = None
@@ -187,9 +186,6 @@ class NotebookGenerator:
                 questionary.Choice(
                     "Inference & Generation", checked=True, value="inference"
                 ),
-                questionary.Choice(
-                    "Interactive Hyperparameter Widgets", checked=True, value="widgets"
-                ),
             ],
             style=self.questionary_style,
         ).ask()
@@ -273,12 +269,6 @@ class NotebookGenerator:
         )
 
         section_num = 8
-        if self.features["widgets"]:
-            table.add_row(
-                f"{section_num}. Hyperparameter Widgets",
-                "Interactive sliders for LR, batch size, epochs",
-            )
-            section_num += 1
 
         if self.features["training"]:
             table.add_row(
@@ -365,8 +355,7 @@ Generated with the interactive notebook generator from [{REPO_NAME}]({self.repo_
         """Generate pip install cell."""
         code = """# Install dependencies
 !pip install -q lightning==2.6.0 wandb==0.23.1 transformers==4.57.3 datasets==4.4.2 \\
-    python-dotenv==1.2.1 pydantic==2.12.5 pydantic-settings==2.12.0 \\
-    ipywidgets
+    python-dotenv==1.2.1 pydantic==2.12.5 pydantic-settings==2.12.0
 
 print("✓ Dependencies installed successfully!")"""
         return self.generate_code_cell(code)
@@ -528,15 +517,18 @@ os.environ['BLOCK_SIZE'] = '{self.hyperparams['block_size']}'
 os.environ['DATA_LENGTH'] = '{self.hyperparams['data_length']}'
 
 # Training hyperparameters
-# Note: These values will be used by the train() function.
-# If you run the widget cell below, widget values will override these.
+# Note: You can edit these values to customize training behavior
 os.environ['BATCH_SIZE'] = '{self.hyperparams['batch_size']}'
 os.environ['LR'] = '{self.hyperparams['lr']}'
 os.environ['MAX_EPOCHS'] = '{self.hyperparams['max_epochs']}'
 os.environ['MAX_TRAINING_HOURS'] = '5'
+os.environ['IS_RESUME'] = 'false'
 
-# AWS configuration (will be overridden by secrets if loaded)
-os.environ.setdefault('AWS_ENABLED', 'false')
+# AWS/S3 configuration (will be overridden by secrets if loaded)
+os.environ['AWS_ENABLED'] = 'false'
+os.environ['AWS_ENDPOINT_URL'] = ''
+os.environ['AWS_BUCKET_NAME'] = 'deep-delta-learning-lm'
+os.environ['S3_MODEL_PATH'] = ''
 
 # WandB configuration (will be overridden by secrets if loaded)
 # Note: WANDB_API_KEY will be loaded from secrets in the previous cell
@@ -574,112 +566,6 @@ if torch.cuda.is_available():
     print(f"CUDA device: {{torch.cuda.get_device_name(0)}}")
 
 print("\\n✓ Environment ready!")"""
-        return self.generate_code_cell(code)
-
-    def generate_widget_cell(self) -> Dict:
-        """Generate interactive hyperparameter widgets with optional timeout."""
-        code = f"""# Interactive Hyperparameter Configuration (Optional)
-# This cell provides interactive widgets for tuning hyperparameters.
-# If running in background or automated mode, it will auto-proceed after 30 seconds.
-
-import ipywidgets as widgets
-from IPython.display import display, HTML
-import threading
-import time
-
-# Flag to track if user interacted
-user_interacted = False
-auto_proceed_after = 30  # seconds
-
-# Create sliders
-lr_slider = widgets.FloatLogSlider(
-    value={self.hyperparams['lr']},
-    base=10,
-    min=-5,  # 1e-5
-    max=-2,  # 1e-2
-    step=0.1,
-    description='Learning Rate:',
-    style={{'description_width': 'initial'}},
-    readout_format='.2e'
-)
-
-batch_size_slider = widgets.IntSlider(
-    value={self.hyperparams['batch_size']},
-    min=1,
-    max=32,
-    step=1,
-    description='Batch Size:',
-    style={{'description_width': 'initial'}}
-)
-
-epochs_slider = widgets.IntSlider(
-    value={self.hyperparams['max_epochs']},
-    min=1,
-    max=10,
-    step=1,
-    description='Epochs:',
-    style={{'description_width': 'initial'}}
-)
-
-n_layer_slider = widgets.IntSlider(
-    value=8,
-    min=4,
-    max=16,
-    step=2,
-    description='Model Layers:',
-    style={{'description_width': 'initial'}}
-)
-
-n_embd_slider = widgets.IntSlider(
-    value=384,
-    min=128,
-    max=768,
-    step=128,
-    description='Embedding Dim:',
-    style={{'description_width': 'initial'}}
-)
-
-# Status display
-status_label = widgets.HTML(
-    value=f"<p style='color: #00d787;'>⏱ Adjust sliders within {{auto_proceed_after}} seconds, or they'll auto-apply with default values</p>"
-)
-
-# Apply widget values to environment
-def apply_hyperparams(change=None):
-    global user_interacted
-    user_interacted = True
-    os.environ['LR'] = str(lr_slider.value)
-    os.environ['BATCH_SIZE'] = str(batch_size_slider.value)
-    os.environ['MAX_EPOCHS'] = str(epochs_slider.value)
-    print(f"✓ Applied: LR={{lr_slider.value:.2e}}, Batch={{batch_size_slider.value}}, Epochs={{epochs_slider.value}}")
-
-# Auto-proceed timer
-def auto_proceed_timer():
-    for remaining in range(auto_proceed_after, 0, -1):
-        if user_interacted:
-            status_label.value = "<p style='color: #00d787;'>✓ User interaction detected - values will be applied</p>"
-            return
-        status_label.value = f"<p style='color: #ffa500;'>⏱ Auto-proceeding in {{remaining}} seconds (adjust sliders to customize)</p>"
-        time.sleep(1)
-
-    if not user_interacted:
-        apply_hyperparams()
-        status_label.value = "<p style='color: #00d787;'>✓ Auto-applied default values</p>"
-
-# Auto-apply on widget change
-lr_slider.observe(apply_hyperparams, names='value')
-batch_size_slider.observe(apply_hyperparams, names='value')
-epochs_slider.observe(apply_hyperparams, names='value')
-
-# Display widgets
-display(status_label)
-display(lr_slider, batch_size_slider, epochs_slider, n_layer_slider, n_embd_slider)
-
-# Start auto-proceed timer in background thread
-timer_thread = threading.Thread(target=auto_proceed_timer, daemon=True)
-timer_thread.start()
-
-print(f"Hyperparameter widgets ready. Default values will apply in {{auto_proceed_after}}s if unchanged.")"""
         return self.generate_code_cell(code)
 
     def generate_training_cells(self) -> List[Dict]:
@@ -808,23 +694,18 @@ print("─"*60)"""
         cells.append(self.generate_markdown_cell("## Import Libraries"))
         cells.append(self.generate_imports_cell())
 
-        # 8. Widgets (if enabled)
-        if self.features["widgets"]:
-            cells.append(self.generate_markdown_cell("## Hyperparameter Configuration"))
-            cells.append(self.generate_widget_cell())
-
-        # 9. Training (if enabled)
+        # 8. Training (if enabled)
         if self.features["training"]:
             cells.extend(self.generate_training_cells())
 
-        # 10. Inference (if enabled)
+        # 9. Inference (if enabled)
         if self.features["inference"]:
             cells.extend(self.generate_inference_cells())
 
-        # 11. Next steps
+        # 10. Next steps
         next_steps_content = f"""## Next Steps
 
-- Experiment with different hyperparameters using the {"widgets above" if self.features['widgets'] else "environment variables"}
+- Experiment with different hyperparameters by editing the environment variables in the Environment Configuration cell
 - Try different prompts for text generation
 - Monitor training progress (checkpoints saved in `{self.get_environment_config()['checkpoint_dir']}`)
 - Read more about Deep Delta Learning: [arXiv:2601.00417](https://arxiv.org/abs/2601.00417)
@@ -902,7 +783,7 @@ print("─"*60)"""
 • NUM_WORKERS is set to {self.get_environment_config()['num_workers']} (optimized for {self.environment})
 • Checkpoints saved to {self.get_environment_config()['checkpoint_dir']}
 • Secrets loading included: {secrets_info[self.environment]}
-• {"Interactive widgets enabled for hyperparameter tuning" if self.features['widgets'] else "Configure hyperparameters in environment setup"}
+• Hyperparameters can be edited in the Environment Configuration cell
 • {"Training pipeline included - ready to train!" if self.features['training'] else "Training pipeline not included"}
 • {"Inference pipeline included - load checkpoint and generate!" if self.features['inference'] else "Inference pipeline not included"}
 """
