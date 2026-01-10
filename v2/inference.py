@@ -30,12 +30,12 @@ def run_inference(
     settings = get_settings()
 
     # --- User-adjustable defaults ---
-    DEFAULT_PROMPT = "Once upon a "
+    DEFAULT_PROMPT = "Once upon a"
     DEFAULT_MAX_NEW_TOKENS = 50
     DEFAULT_TEMPERATURE = 1.0
     DEFAULT_TOP_K = 50
-    DEFAULT_REPETITION_PENALTY = 1.1
-    DEFAULT_DEBUG = True
+    DEFAULT_REPETITION_PENALTY = 1.2
+    DEFAULT_DEBUG = False
     # --------------------------------
 
     # Use provided parameters or check environment, fallback to defaults
