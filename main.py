@@ -28,6 +28,15 @@ def main(
             from v2.inference import run_inference
 
             run_inference()
+    elif version == "v3":
+        if mode == "train":
+            from v3.train import train
+
+            train()
+        elif mode == "inference":
+            from v3.inference import run_inference
+
+            run_inference()
     else:
         raise ValueError(f"Unknown version: {version}")
 

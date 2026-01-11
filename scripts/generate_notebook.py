@@ -497,12 +497,12 @@ load_env_file()"""
         code = f"""# Configure environment variables
 import os
 
-# Critical: Set NUM_WORKERS={env_config['num_workers']} for {self.environment} environment
-os.environ['NUM_WORKERS'] = '{env_config['num_workers']}'
+# Critical: Set NUM_WORKERS={env_config["num_workers"]} for {self.environment} environment
+os.environ['NUM_WORKERS'] = '{env_config["num_workers"]}'
 
 # Checkpoint and cache directories
-checkpoint_dir = '{env_config['checkpoint_dir']}'
-dataset_cache = '{env_config['dataset_cache']}'
+checkpoint_dir = '{env_config["checkpoint_dir"]}'
+dataset_cache = '{env_config["dataset_cache"]}'
 
 os.environ['CHECKPOINT_DIR'] = checkpoint_dir
 os.environ['DATASET_CACHE'] = dataset_cache
@@ -513,14 +513,14 @@ os.makedirs(dataset_cache, exist_ok=True)
 
 # Tokenizer configuration
 os.environ['TOKENIZER_NAME'] = 'gpt2'
-os.environ['BLOCK_SIZE'] = '{self.hyperparams['block_size']}'
-os.environ['DATA_LENGTH'] = '{self.hyperparams['data_length']}'
+os.environ['BLOCK_SIZE'] = '{self.hyperparams["block_size"]}'
+os.environ['DATA_LENGTH'] = '{self.hyperparams["data_length"]}'
 
 # Training hyperparameters
 # Note: You can edit these values to customize training behavior
-os.environ['BATCH_SIZE'] = '{self.hyperparams['batch_size']}'
-os.environ['LR'] = '{self.hyperparams['lr']}'
-os.environ['MAX_EPOCHS'] = '{self.hyperparams['max_epochs']}'
+os.environ['BATCH_SIZE'] = '{self.hyperparams["batch_size"]}'
+os.environ['LR'] = '{self.hyperparams["lr"]}'
+os.environ['MAX_EPOCHS'] = '{self.hyperparams["max_epochs"]}'
 os.environ['MAX_TRAINING_HOURS'] = '5'
 os.environ['IS_RESUME'] = 'false'
 
@@ -621,13 +621,13 @@ Load a trained checkpoint and generate text."""
 import os
 
 # Set checkpoint path
-checkpoint_path = '{env_config['checkpoint_dir']}/last.ckpt'
+checkpoint_path = '{env_config["checkpoint_dir"]}/last.ckpt'
 os.environ['CHECKPOINT_PATH'] = checkpoint_path
 
 if not os.path.exists(checkpoint_path):
     print(f"⚠ Checkpoint not found at {{checkpoint_path}}")
     print("Available checkpoints:")
-    !ls -lh {env_config['checkpoint_dir']}
+    !ls -lh {env_config["checkpoint_dir"]}
 else:
     print(f"✓ Checkpoint found: {{checkpoint_path}}")"""
 
@@ -707,7 +707,7 @@ print("─"*60)"""
 
 - Experiment with different hyperparameters by editing the environment variables in the Environment Configuration cell
 - Try different prompts for text generation
-- Monitor training progress (checkpoints saved in `{self.get_environment_config()['checkpoint_dir']}`)
+- Monitor training progress (checkpoints saved in `{self.get_environment_config()["checkpoint_dir"]}`)
 - Read more about Deep Delta Learning: [arXiv:2601.00417](https://arxiv.org/abs/2601.00417)
 
 **Repository:** {self.repo_url}"""
@@ -780,12 +780,12 @@ print("─"*60)"""
 
 [bold cyan]Tips:[/bold cyan]
 • Model version: {self.version.upper()}
-• NUM_WORKERS is set to {self.get_environment_config()['num_workers']} (optimized for {self.environment})
-• Checkpoints saved to {self.get_environment_config()['checkpoint_dir']}
+• NUM_WORKERS is set to {self.get_environment_config()["num_workers"]} (optimized for {self.environment})
+• Checkpoints saved to {self.get_environment_config()["checkpoint_dir"]}
 • Secrets loading included: {secrets_info[self.environment]}
 • Hyperparameters can be edited in the Environment Configuration cell
-• {"Training pipeline included - ready to train!" if self.features['training'] else "Training pipeline not included"}
-• {"Inference pipeline included - load checkpoint and generate!" if self.features['inference'] else "Inference pipeline not included"}
+• {"Training pipeline included - ready to train!" if self.features["training"] else "Training pipeline not included"}
+• {"Inference pipeline included - load checkpoint and generate!" if self.features["inference"] else "Inference pipeline not included"}
 """
 
         self.console.print(

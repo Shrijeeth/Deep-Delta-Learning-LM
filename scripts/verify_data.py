@@ -95,7 +95,7 @@ for i in range(min(5, len(input_ids) - 1)):
     actual_label = labels[i].item()
     match = "✓" if expected_label == actual_label else "✗"
     print(
-        f"Position {i}: input[{i+1}]={expected_label}, label[{i}]={actual_label} {match}"
+        f"Position {i}: input[{i + 1}]={expected_label}, label[{i}]={actual_label} {match}"
     )
 
 print("\nLast few positions (should have -100 for padding):")
