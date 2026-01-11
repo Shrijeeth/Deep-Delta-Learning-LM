@@ -42,7 +42,7 @@ def train():
     dm = CustomPretrainingDataModule(
         model_name=settings.TOKENIZER_NAME,
         dataset=settings.DATASET,
-        subset=settings.SUBSET,
+        subset=settings.DATA_SUBSET,
         batch_size=settings.BATCH_SIZE,
         max_length=settings.DATA_LENGTH,
         text_column="text",
