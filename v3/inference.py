@@ -30,8 +30,8 @@ def run_inference(
     settings = get_settings()
 
     # --- User-adjustable defaults ---
-    DEFAULT_PROMPT = "Once upon a"
-    DEFAULT_MAX_NEW_TOKENS = 50
+    DEFAULT_PROMPT = "The term 'Indian Constitution' is about "
+    DEFAULT_MAX_NEW_TOKENS = 128
     DEFAULT_TEMPERATURE = 1.0
     DEFAULT_TOP_K = 50
     DEFAULT_REPETITION_PENALTY = 1.2
@@ -91,5 +91,5 @@ def run_inference(
     )
     output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
 
-    print(f"\nPrompt: {PROMPT}\n---\n{output_text}\n")
+    print(f"\nPrompt:\n---\n{output_text}\n")
     return output_text
